@@ -1,21 +1,23 @@
 export function Card({ children, className = '' }) {
   return (
     <div className={`
-      w-full max-w-sm
-      p-8
+      relative
+      w-full
+      p-6
       bg-white
-      rounded-3xl
-      shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)]
-      border border-gray-100
-      backdrop-blur-sm bg-white/95
-      transition-all duration-500 ease-out
-      hover:shadow-[0_20px_60px_-15px_rgba(59,130,246,0.15)]
-      hover:border-blue-100
-      hover:scale-[1.01]
-      hover:-translate-y-1
+      rounded-lg
+      border border-gray-200
+      shadow-xs
+      transition-all duration-150 ease-out
+      hover:shadow-sm
+      group
+      before:absolute before:inset-0 before:bg-gradient-to-br before:from-white before:to-gray-50 before:opacity-0 before:transition-opacity before:duration-200 before:hover:opacity-100
       ${className}
     `}>
-      {children}
+      <div className="relative z-10">
+        {children}
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
     </div>
   );
 }
