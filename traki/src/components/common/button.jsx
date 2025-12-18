@@ -19,7 +19,7 @@ export function Button({
   const variants = {
     primary: `
       bg-gradient-to-r from-blue-600 to-blue-700 
-      text-white 
+      text-black 
       hover:from-blue-700 hover:to-blue-800 
       hover:shadow-lg hover:shadow-blue-500/30
       focus:ring-blue-400/40 focus:ring-offset-white
