@@ -37,6 +37,7 @@ export function TripsPage() {
   const [selectedLoading, setSelectedLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const { createLog } = useFuelLogs();
+  const [activeFilter, setActiveFilter] = useState('all');
 
   // Fetch drivers when form is shown (for admin to assign)
   useEffect(() => {
@@ -104,6 +105,22 @@ export function TripsPage() {
       setSelectedTrip(res.data);
     } catch (err) {
       setFormError(err.message || 'Failed to update status');
+    }
+  };
+
+  // Change status from list (driver quick action)
+  const handleChangeStatus = async (tripId, newStatus) => {
+    try {
+      await updateTrip(tripId, { status: newStatus });
+      // If currently viewing this trip, refresh it
+      if (selectedTrip && selectedTrip._id === tripId) {
+        const res = await getTripByIdRequestHandler(tripId);
+        setSelectedTrip(res.data);
+      }
+      setSuccessMessage('Status updated');
+      setTimeout(() => setSuccessMessage(''), 2500);
+    } catch (err) {
+      setFormError(err.message || 'Failed to change status');
     }
   };
 
@@ -181,22 +198,38 @@ export function TripsPage() {
     setFormError('');
   };
 
-  // Filter trips by status for stats
-  const upcomingTrips = trips.filter(trip =>
-    new Date(trip.plannedStart || trip.startDate || 0) > new Date() && (trip.status === 'TO_DO' || trip.status === 'SCHEDULED')
-  );
-  const activeTrips = trips.filter(trip => 
-    trip.status === 'IN_PROGRESS'
-  );
-  const completedTrips = trips.filter(trip =>
-    /done|completed/i.test(String(trip.status)) || trip.status === 'DONE'
-  );
+  // Filter trips by status
+  const filterTrips = (trips, filter) => {
+    switch(filter) {
+      case 'upcoming':
+        return trips.filter(trip =>
+          new Date(trip.plannedStart || trip.startDate || 0) > new Date() && 
+          (trip.status === 'TO_DO' || trip.status === 'SCHEDULED' || trip.status === 'scheduled')
+        );
+      case 'active':
+        return trips.filter(trip => 
+          trip.status === 'IN_PROGRESS' || trip.status === 'in_progress' || trip.status === 'active'
+        );
+      case 'completed':
+        return trips.filter(trip =>
+          /done|completed/i.test(String(trip.status)) || trip.status === 'DONE' || trip.status === 'COMPLETED'
+        );
+      default:
+        return trips;
+    }
+  };
+
+  const filteredTrips = filterTrips(trips, activeFilter);
+
+  const upcomingTrips = filterTrips(trips, 'upcoming');
+  const activeTrips = filterTrips(trips, 'active');
+  const completedTrips = filterTrips(trips, 'completed');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-custom-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
@@ -211,7 +244,7 @@ export function TripsPage() {
             {user?.role === 'ADMIN' && !showForm && (
               <Button 
                 onClick={() => setShowForm(true)}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-2.5 shadow-md hover:shadow-lg transition-shadow flex items-center gap-2"
+                className="px-5 py-2.5 bg-gradient-to-r from-cerulean to-cerulean/90 text-white font-medium rounded-lg hover:from-cerulean/90 hover:to-cerulean transition-all duration-200 flex items-center gap-2 shadow-sm hover:shadow-md"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -223,55 +256,66 @@ export function TripsPage() {
 
           {/* Success message */}
           {successMessage && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl shadow-sm">
+            <div className="mb-6 p-4 bg-sage/10 border border-sage/20 rounded-lg">
               <div className="flex items-center">
-                <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="text-green-700 font-medium">{successMessage}</span>
+                <div className="w-8 h-8 rounded-full bg-sage/20 flex items-center justify-center mr-3">
+                  <svg className="w-4 h-4 text-sage" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <span className="text-gray-900 font-medium">{successMessage}</span>
               </div>
             </div>
           )}
 
           {/* Stats cards */}
           {user?.role === 'ADMIN' && trips.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div 
+                className={`bg-white border border-gray-200 rounded-xl shadow-sm p-5 cursor-pointer transition-all duration-200 hover:shadow-md ${activeFilter === 'upcoming' ? 'ring-2 ring-cerulean/30' : ''}`}
+                onClick={() => setActiveFilter(activeFilter === 'upcoming' ? 'all' : 'upcoming')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 font-medium">Upcoming Trips</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{upcomingTrips.length}</p>
                   </div>
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-3 bg-cerulean/10 rounded-lg">
+                    <svg className="w-6 h-6 text-cerulean" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div 
+                className={`bg-white border border-gray-200 rounded-xl shadow-sm p-5 cursor-pointer transition-all duration-200 hover:shadow-md ${activeFilter === 'active' ? 'ring-2 ring-sage/30' : ''}`}
+                onClick={() => setActiveFilter(activeFilter === 'active' ? 'all' : 'active')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 font-medium">Active Trips</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{activeTrips.length}</p>
                   </div>
-                  <div className="p-3 bg-amber-50 rounded-lg">
-                    <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-3 bg-sage/10 rounded-lg">
+                    <svg className="w-6 h-6 text-sage" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div 
+                className={`bg-white border border-gray-200 rounded-xl shadow-sm p-5 cursor-pointer transition-all duration-200 hover:shadow-md ${activeFilter === 'completed' ? 'ring-2 ring-amber/30' : ''}`}
+                onClick={() => setActiveFilter(activeFilter === 'completed' ? 'all' : 'completed')}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 font-medium">Completed</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{completedTrips.length}</p>
                   </div>
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-3 bg-amber/10 rounded-lg">
+                    <svg className="w-6 h-6 text-amber" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
@@ -283,46 +327,52 @@ export function TripsPage() {
 
         {/* Form section (admin only) */}
         {showForm && user?.role === 'ADMIN' && (
-            <div className="mb-8 bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingTrip ? 'Edit Trip' : 'Create New Trip'}
-                </h2>
-                <p className="text-gray-600 mt-1">
-                  {editingTrip ? 'Update trip details' : 'Schedule a new trip for your fleet'}
-                </p>
+            <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-sm">
+            <div className="px-6 py-5 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {editingTrip ? 'Edit Trip' : 'Create New Trip'}
+                  </h2>
+                  <p className="text-gray-500 text-sm mt-1">
+                    {editingTrip ? 'Update trip details' : 'Schedule a new trip for your fleet'}
+                  </p>
+                </div>
+                {editingTrip && (
+                  <span className="px-3 py-1 bg-cerulean/10 text-cerulean text-xs font-semibold rounded-full">
+                    Editing Mode
+                  </span>
+                )}
               </div>
-              {editingTrip && (
-                <span className="px-4 py-2 bg-blue-100 text-blue-700 text-sm font-semibold rounded-full">
-                  Editing Mode
-                </span>
-              )}
             </div>
             
             {/* Form error */}
             {formError && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="mx-6 mt-6 p-4 bg-terracotta/10 border border-terracotta/20 rounded-lg">
                 <div className="flex items-center">
-                  <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-red-700 font-medium">{formError}</span>
+                  <div className="w-8 h-8 rounded-full bg-terracotta/20 flex items-center justify-center mr-3">
+                    <svg className="w-4 h-4 text-terracotta" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-gray-900">{formError}</span>
                 </div>
               </div>
             )}
             
-            <TripForm 
-              onSubmit={handleSubmit}
-              isLoading={loading}
-              error={formError}
-              trip={editingTrip}
-              trucks={trucks}
-              trucksLoading={trucksLoading}
-              drivers={drivers}
-              driversLoading={driversLoading}
-              onCancel={handleCancel}
-            />
+            <div className="p-6">
+              <TripForm 
+                onSubmit={handleSubmit}
+                isLoading={loading}
+                error={formError}
+                trip={editingTrip}
+                trucks={trucks}
+                trucksLoading={trucksLoading}
+                drivers={drivers}
+                driversLoading={driversLoading}
+                onCancel={handleCancel}
+              />
+            </div>
           </div>
         )}
 
@@ -342,63 +392,82 @@ export function TripsPage() {
         )}
 
         {/* Trips list */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-200">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+          <div className="px-6 py-5 border-b border-gray-100">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Trips</h2>
-                <p className="text-gray-600 text-sm mt-1">
-                  {trips.length} trip{trips.length !== 1 ? 's' : ''} found
-                  {user?.role === 'ADMIN' && ' • Total'}
-                  {user?.role === 'DRIVER' && ' • Assigned to you'}
+                <h2 className="text-lg font-semibold text-gray-900">Trips</h2>
+                <p className="text-gray-500 text-sm mt-1">
+                  {filteredTrips.length} trip{filteredTrips.length !== 1 ? 's' : ''} found
+                  {activeFilter !== 'all' && ` • ${activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}`}
                 </p>
               </div>
               
-              {/* Filter options could be added here in the future */}
+              {/* Filter options */}
               {trips.length > 0 && (
                 <div className="flex items-center space-x-2">
-                  <button className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">
-                    Filter
-                  </button>
-                  <button className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50">
-                    Sort
-                  </button>
+                  <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+                    <button 
+                      onClick={() => setActiveFilter('all')}
+                      className={`px-3 py-1.5 text-sm transition-colors ${activeFilter === 'all' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      All
+                    </button>
+                    <button 
+                      onClick={() => setActiveFilter('upcoming')}
+                      className={`px-3 py-1.5 text-sm transition-colors ${activeFilter === 'upcoming' ? 'bg-cerulean text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      Upcoming
+                    </button>
+                    <button 
+                      onClick={() => setActiveFilter('active')}
+                      className={`px-3 py-1.5 text-sm transition-colors ${activeFilter === 'active' ? 'bg-sage text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      Active
+                    </button>
+                    <button 
+                      onClick={() => setActiveFilter('completed')}
+                      className={`px-3 py-1.5 text-sm transition-colors ${activeFilter === 'completed' ? 'bg-amber text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      Completed
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
           
-          <div className="p-8">
+          <div className="p-6">
             {loading && !editingTrip ? (
               <div className="flex flex-col items-center justify-center py-16">
-                <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-blue-600 mb-5"></div>
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-cerulean mb-5"></div>
                 <p className="text-gray-500 text-lg">Loading trips...</p>
                 <p className="text-gray-400 text-sm mt-2">Please wait while we fetch your trips</p>
               </div>
             ) : error ? (
-              <div className="p-6 bg-red-50 border border-red-200 rounded-xl">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <svg className="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+              <div className="p-6 bg-terracotta/10 border border-terracotta/20 rounded-lg">
+                <div className="flex items-start">
+                  <div className="w-10 h-10 rounded-full bg-terracotta/20 flex items-center justify-center mr-4 mt-1">
+                    <svg className="w-5 h-5 text-terracotta" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
                   </div>
-                  <div className="ml-4">
-                    <h3 className="text-lg font-medium text-red-800">Error loading trips</h3>
-                    <div className="mt-2 text-red-700">{error}</div>
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-1">Error loading trips</h3>
+                    <div className="text-gray-600 mb-4">{error}</div>
                     <button 
                       onClick={() => window.location.reload()}
-                      className="mt-4 text-sm bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-medium transition-colors"
+                      className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
                     >
                       Try Again
                     </button>
                   </div>
                 </div>
               </div>
-            ) : trips.length === 0 ? (
+            ) : filteredTrips.length === 0 ? (
               <div className="text-center py-16">
-                <div className="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-5">
-                  <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-5">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                   </svg>
                 </div>
@@ -414,18 +483,21 @@ export function TripsPage() {
                 {user?.role === 'ADMIN' && !showForm && (
                   <Button 
                     onClick={() => setShowForm(true)}
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3"
+                    className="px-6 py-3 bg-gradient-to-r from-cerulean to-cerulean/90 text-white font-medium rounded-lg hover:from-cerulean/90 hover:to-cerulean transition-all duration-200"
                   >
                     Create Your First Trip
                   </Button>
                 )}
               </div>
-            ) : (
+              ) : (
               <TripsList 
-                trips={trips}
+                trips={filteredTrips}
                 userRole={user?.role}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onView={handleView}
+                onDownload={(tId) => handleDownload(tId)}
+                onStatusChange={handleChangeStatus}
                 loading={loading}
               />
             )}
